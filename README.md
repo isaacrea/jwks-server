@@ -1,5 +1,10 @@
 # JWKS Server v3
 This project implements a JSON Web Key Set (JWKS) server with enhanced security features. It provides endpoints for key distribution, user registration, authentication, and includes mechanisms for key rotation, AES encryption, authentication logging, and rate limiting.
+## Testing
+- Test suite covers over 80%
+- **Gradebot test for rate limiting did not throw requests fast enough to trigger my rate limiter**
+  - Wrote separate test `test_rate_limit.py`
+  - Server successfully returns `HTTP 429 Too Many Requests` 
 ## Features
 - AES Encryption of Private Keys
   - Private keys stored in the database are encrypted using AES encryption with the Fernet module from the `cryptography` library.
@@ -22,8 +27,4 @@ This project implements a JSON Web Key Set (JWKS) server with enhanced security 
 - JWT Issuance
   - The server issues JSON Web Tokens (JWTs) signed with RSA private keys.
   - Tokens include standard claims and are signed using RS256 algorithm.
-## Testing
-- Test suite covers over 80%
-- **Gradebot test for rate limiting did not throw requests fast enough to trigger my rate limiter**
-  - Wrote separate test `test_rate_limit.py`
-  - Server successfully returns `HTTP 429 Too Many Requests` 
+
