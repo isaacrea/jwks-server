@@ -1,5 +1,3 @@
-# server.py
-
 from flask import Flask, request, jsonify
 import jwt
 from datetime import datetime, timedelta, timezone
