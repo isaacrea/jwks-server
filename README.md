@@ -16,7 +16,6 @@ A learning/portfolio project that implements a JSON Web Key Set (JWKS) server wi
 - [Project Structure](#project-structure)
 - [Requirements](#requirements)
 - [Notes](#notes)
-- [License](#license)
 
 ## Quick Start
 ### 1. Clone and set up Python
@@ -31,6 +30,7 @@ A learning/portfolio project that implements a JSON Web Key Set (JWKS) server wi
 ### 2. Configure environment
    Generate a Fernet key (urlsafe base64):
    ```bash
+   # bash
    python - <<'PY'
    from cryptography.fernet import Fernet
    print(Fernet.generate_key().decrypt())
@@ -110,3 +110,50 @@ If `?expired` is present, issues a token that is already expired using the most 
 ```
 **Rate limiting:** 10 requests/second per client IP. Excess returns **429 Too Many Requests**.
 
+## How It Works
+- **Key Management**
+  - On the first run, the database and tables are created if missing.
+  - Two keys are seeded: one unexpired (valid ~1 hour) and one already expired (for `?expired` testing).
+  - A background loop rotates keys so there's always a valid key before the current one expires.
+  - Old keys are deleted after a retention period.
+- **Private Key Encryption**
+  - Private keys are stored encrypted with Fernet (AES) using `NOT_MY_KEY` from the environment.
+  - JWKS exposes only public components (`n`, `e`) and `kid`.
+- **Users and Auth**
+  - `/register` stores Argon2 password hashes.
+  - `/auth` verifies Argon2 hashes and issues RS256 JWTs with a `kid` header that maps to the active signer in JWKS.
+  - Successful `/auth` calls are logged with IP, timestamp, and user_id (basic auditing).
+
+## Project Structure
+```bash
+.
+├─ server.py                     # Flask app: JWKS, register, auth, rotation
+├─ requirements.txt
+├─ .env.example                  # Sample environment variables (no secrets)
+├─ .gitignore
+└─ README.md
+```
+## Requirements
+**Python:** 3.10 recommended
+
+**requirements.txt** (suggested)
+```txt
+Flask>=3.1.2
+PyJWT>=2.10.1
+cryptography>=46.0.2
+argon2-cffi>=25.1.0
+flask-limiter>=4.0.0
+python-dotenv>=1.1.1      # optional; load .env automatically
+```
+Install:
+```bash
+pip install -r requirements.txt
+```
+
+## Notes
+- This project is intentionally not production-hardened. It demonstrates:
+  - Argon2 for password hashing
+  - Asymmetric JWT signing (RS256) with `kid` and JWKS discovery
+  - Key rotation and key retention
+  - Encrypted private keys at rest
+  - Simple rate limiting and auth logging
