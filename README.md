@@ -1,30 +1,112 @@
-# JWKS Server v3
-This project implements a JSON Web Key Set (JWKS) server with enhanced security features. It provides endpoints for key distribution, user registration, authentication, and includes mechanisms for key rotation, AES encryption, authentication logging, and rate limiting.
-## Testing
-- Test suite covers over 80%
-- **Gradebot test for rate limiting did not throw requests fast enough to trigger my rate limiter**
-  - Wrote separate test `test_rate_limit.py`
-  - Server successfully returns `HTTP 429 Too Many Requests` 
-## Features
-- AES Encryption of Private Keys
-  - Private keys stored in the database are encrypted using AES encryption with the Fernet module from the `cryptography` library.
-  - The encryption key is provided via an environment variable `NOT_MY_KEY`, ensuring it is not hardcoded or exposed in the codebase.
-- User Registration
-  - Users can register via the `POST /register` endpoint by providing a `username` and `email`.
-  - A secure password is generated using UUIDv4 and returned to the user in JSON format.
-  - Passwords are hashed using Argon2 with recommended security settings before being stored in the database.
-- Authentication Logging
-  - Successful authentication requests to the `POST /auth` endpoint are logged in the `auth_logs` table.
-  - The log includes the request IP address, timestamp, and user ID.
-- Rate Limiting
-  - A rate limiter is implemented for the `POST /auth` endpoint using `flask-limiter`.
-  - Limits requests to 10 requests per second to prevent abuse and brute-force attacks.
-  - Excess requests receive a `429 Too Many Requests` response.
-  - Only successful authentication attempts are logged.
-- Key Rotation
-  - RSA key pairs are rotated periodically to enhance security.
-  - Keys are stored with an expiration timestamp and are cleaned up after a retention period.
-- JWT Issuance
-  - The server issues JSON Web Tokens (JWTs) signed with RSA private keys.
-  - Tokens include standard claims and are signed using RS256 algorithm.
+# JWKS Server
+A learning/portfolio project that implements a JSON Web Key Set (JWKS) server with:
+- Rotating RSA signing keys (private keys encrypted at rest)
+- Public key distribution via /.well-known/jwks.json
+- User registration with Argon2 password hashing
+- JWT issuance (RS256) with kid headers
+- Basic authentication logging
+- Rate limiting on /auth
+> **Not for production. This project is for demonstration and learning only.**
+
+## Table of Contents
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [API](#api)
+- [How It Works](#how-it-works)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Notes](#notes)
+- [License](#license)
+
+## Quick Start
+### 1. Clone and set up Python
+   ```bash
+   git clone https://github.com/isaacrea/jwks-server.git
+   cd jwks-server
+   python -m venv .venv
+   # Windows: .venv\Scripts\activate
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+### 2. Configure environment
+   Generate a Fernet key (urlsafe base64):
+   ```bash
+   python - <<'PY'
+   from cryptography.fernet import Fernet
+   print(Fernet.generate_key().decrypt())
+   PY
+   ```
+  Create `.env`:
+  ```ini
+  # .env
+  NOT_MY_KEY=<paste-generated-fernet-key>
+  FLASK_ENV=development
+  PORT=8080
+  ```
+  _(You can also export these as environment variables instead of using a `.env` file.)_
+### 3. Run
+  ```bash
+  python server.py
+  # Server starts on http://localhost:8080
+  ```
+
+## Configuration
+Variable | Required | Description
+--- | :---: | --- |
+`NOT_MY_KEY` | YES | Fernet key for encrypting priviate keys at rest (urlsafe base64).
+`PORT` | NO | Port to bind (default `8080`).
+`FLASK_ENV` | NO | `development` or `production` (affects Flask debug behavior).
+
+#### .env.example
+ ```ini
+  NOT_MY_KEY=g744zYz6qjlsAfSEbbIeuFURXmGrWHG3ZEzl_XxhHHw=
+  FLASK_ENV=development
+  PORT=8080
+  ```
+
+## API
+### `GET /.well-known/jwks.json`
+Returns public keys (unexpired) for verifying tokens.
+```bash
+curl -s http://localhost:8080/.well-known/jwks.json | jq
+```
+Example response:
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "kid": "1",
+      "n": "<base64url-modulus>",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+---
+### `POST /register`
+Registers a user by `usernamne` and `email`. Returns a randomly generated password (UUIDv4) once.
+#### Request
+```json
+  { "username": "alice", "email": "alice@example.com" }
+```
+#### Response
+```json
+  { "password": "b706dcb7-1c90-4a36-9a70-..." }
+```
+> Passwords are Argon2-hashed server-side before storage.
+---
+### `POST /auth[?expired]`
+Authenticates a user and returns a signed JWT (RS256).
+If `?expired` is present, issues a token that is already expired using the most recently expired key (for testing verifiers).
+#### Request
+```json
+  { "username": "alice", "password": "<uuid-from-register>" }
+```
+#### Success (200)
+```json
+  { "token": "<JWT>" }
+```
+**Rate limiting:** 10 requests/second per client IP. Excess returns **429 Too Many Requests**.
 
